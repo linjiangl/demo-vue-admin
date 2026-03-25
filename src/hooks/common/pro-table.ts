@@ -78,13 +78,14 @@ export function useProPaginatedTable<ApiData, SearchParams extends Record<string
   // 自动计算 span 倍数（基于屏幕宽度）
   const breakpoints = useBreakpoints(breakpointsTailwind);
   const autoSpanMultiplier = computed(() => {
-    if (breakpoints.smaller('lg').value) return 1; // < 1024px
-    return 2; // >= 1024px
+    if (breakpoints.smaller('2xl').value) return 2;
+    return 1;
   });
 
   // 确定最终使用的 span 倍数
   const finalSpanMultiplier = computed(() => {
     if (searchSpanMultiplier === 'auto') {
+      console.log(autoSpanMultiplier.value)
       return autoSpanMultiplier.value;
     }
     return toValue(searchSpanMultiplier);

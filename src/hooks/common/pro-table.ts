@@ -85,7 +85,6 @@ export function useProPaginatedTable<ApiData, SearchParams extends Record<string
   // 确定最终使用的 span 倍数
   const finalSpanMultiplier = computed(() => {
     if (searchSpanMultiplier === 'auto') {
-      console.log(autoSpanMultiplier.value)
       return autoSpanMultiplier.value;
     }
     return toValue(searchSpanMultiplier);
@@ -123,6 +122,7 @@ export function useProPaginatedTable<ApiData, SearchParams extends Record<string
       size: params.pageSize,
       sorting: sorting.value,
       ...filterNullish(extraParams ?? {}),
+      ...filterNullish(searchForm.values.value),
       ...values
     } as { current: number; size: number } & SearchParams);
 
@@ -199,7 +199,7 @@ export function useProPaginatedTable<ApiData, SearchParams extends Record<string
   function updateSearchValues(values: Partial<SearchParams>, triggerSearch = true) {
     Object.assign(searchForm.values.value, values);
     if (triggerSearch) {
-      searchForm.submit();
+      getDataByPage(1);
     }
   }
 
@@ -217,6 +217,7 @@ export function useProPaginatedTable<ApiData, SearchParams extends Record<string
     tableProps,
     // Search related
     searchForm,
+    search,
     searchColumns: formColumns,
     proSearchFormProps,
     // Sort related

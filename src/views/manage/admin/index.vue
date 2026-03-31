@@ -4,8 +4,8 @@ import type { JSX } from 'vue/jsx-runtime';
 import { adminStatusLabels, adminStatusOptions } from '@/constants/business';
 import { createAdmin, fetchAdminList, updateAdmin, updateAdminPassword } from '@/service/api';
 import { useAppStore } from '@/store/modules/app';
-import { useProPaginatedTable, useProTableOperate } from '@/hooks/common/pro-table';
-import { getRouteQueryParams } from '@/utils/common';
+import { useNaivePaginatedTable, useTableOperate } from '@/hooks/common/pro-table';
+import { getRouteQueryParam } from '@/utils/common';
 import { toDatetimeRangeFieldProps } from '@/utils/date';
 import { $t } from '@/locales';
 import AdminOperateForm from './modules/admin-operate-form.vue';
@@ -20,16 +20,18 @@ const operateTypeTitle: Record<OperateType, string> = {
   password: '修改管理员密码'
 };
 
-const { columns, columnChecks, data, loading, tableProps, searchForm, searchColumns, proSearchFormProps, getData } =
-  useProPaginatedTable<Api.SystemManage.Admin, Api.SystemManage.AdminSearchParams>({
+const { columns, columnChecks, data, loading, tableProps, searchForm, searchColumns, searchFormProps, getData } =
+  useNaivePaginatedTable<Api.SystemManage.Admin, Api.SystemManage.AdminSearchParams>({
     api: fetchAdminList,
-    defaultCurrent: 1,
-    defaultPageSize: 20,
-    extraParams: getRouteQueryParams('id'),
-    initialSearchValues: {
+    searchInitialValues: {
+      current: 1,
+      size: 20,
       username: null,
       mobile: null,
       status: null
+    },
+    searchOnceValues: {
+      id: getRouteQueryParam('id')
     },
     searchColumns: () => [
       {
@@ -171,8 +173,8 @@ const { columns, columnChecks, data, loading, tableProps, searchForm, searchColu
     ]
   });
 
-const { operateType, modalForm, formLoading, handleEdit, handleAdd, closeFormModal, checkedRowKeys } =
-  useProTableOperate<Api.SystemManage.Admin, Api.SystemManage.Admin, OperateType>({
+const { operateType, form, formLoading, handleEdit, handleAdd, closeForm, checkedRowKeys } =
+  useTableOperate<Api.SystemManage.Admin, Api.SystemManage.Admin, OperateType, 'id'>({
     data,
     idKey: 'id',
     getData,
@@ -210,7 +212,7 @@ async function editStatus(row: Api.SystemManage.Admin, status: number) {
   <ConfigProvider>
     <NFlex class="h-full" vertical size="large">
       <ProCard title="筛选条件" class="mb-10px" content-class="pb-0!">
-        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="proSearchFormProps" />
+        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="searchFormProps" />
       </ProCard>
       <ProDataTable
         v-model:checked-row-keys="checkedRowKeys"
@@ -230,13 +232,13 @@ async function editStatus(row: Api.SystemManage.Admin, status: number) {
         </template>
       </ProDataTable>
       <ProDrawerForm
-        :form="modalForm"
+        :form="form"
         label-placement="left"
         label-align="right"
         label-width="120"
         :loading="formLoading"
         :width="appStore.isMobile ? '100%' : undefined"
-        @mask-click="closeFormModal"
+        @mask-click="closeForm"
       >
         <ProDrawerContent :title="operateTypeTitle[operateType]" :native-scrollbar="false">
           <AdminOperateForm :type="operateType" />

@@ -1,278 +1,353 @@
-import type { ComputedRef, Ref } from 'vue';
-import { computed, ref, shallowRef, toValue } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, effectScope, onScopeDispose, reactive, shallowRef, watch } from 'vue';
+import type { Ref } from 'vue';
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
-import type { ProDataTableColumns, ProSearchFormColumn } from 'pro-naive-ui';
-import { createProModalForm, createProSearchForm, useNDataTable } from 'pro-naive-ui';
+import type { PaginationProps } from 'naive-ui';
+import { useLoading, useTable } from '@sa/hooks';
+import type { PaginationData, TableColumnCheck, UseTableOptions } from '@sa/hooks';
 import type { FlatResponseData } from '@sa/axios';
-import type { TableColumnCheck } from '@sa/hooks';
-import { useLoading } from '@sa/hooks';
+import type { ProSearchFormColumns } from 'pro-naive-ui';
+import { createProModalForm, createProSearchForm } from 'pro-naive-ui';
 import { jsonClone } from '@sa/utils';
-import { filterNullish } from '@/utils/common';
-import { getDateSubtract } from '@/utils/date';
+import { useAppStore } from '@/store/modules/app';
 import { $t } from '@/locales';
 
-/** 日期参数选项类型 */
-type DateParamOptions<T extends Record<string, any> = Record<string, any>> = {
-  /** URL parameter name, default 'date' */
-  paramName?: string;
-  /** Target form field name, default 'created_at' */
-  targetField?: keyof T | string;
-  /** Auto trigger search, default true */
-  autoSearch?: boolean;
+export type UseNaiveTableOptions<ResponseData, ApiData, Pagination extends boolean> = Omit<
+  UseTableOptions<ResponseData, ApiData, NaiveUI.TableColumn<ApiData>, Pagination>,
+  'pagination' | 'getColumnChecks' | 'getColumns'
+> & {
+  /**
+   * get column visible
+   *
+   * @param column
+   *
+   * @default true
+   *
+   * @returns true if the column is visible, false otherwise
+   */
+  getColumnVisible?: (column: NaiveUI.TableColumn<ApiData>) => boolean;
 };
 
-type UseProPaginatedTableOptions<ApiData, SearchParams extends Record<string, any>> = {
-  /** API function, receives pagination and search values */
-  api: (
-    params: { current: number; size: number } & SearchParams
-  ) => Promise<FlatResponseData<any, Api.Common.PaginatingQueryRecord<ApiData>>>;
-  /** Table columns definition */
-  columns: () => ProDataTableColumns<ApiData>;
-  /** Search form columns definition */
-  searchColumns?: () => ProSearchFormColumn<SearchParams>[];
-  /** Initial search form values */
-  initialSearchValues?: SearchParams;
-  /** Extra params not in form, always sent with API requests */
-  extraParams?: Partial<SearchParams>;
-  /** Default current page (default: 1) */
-  defaultCurrent?: number;
-  /** Default page size (default: 10) */
-  defaultPageSize?: number;
-  /** Default collapsed state for search form (default: true) */
-  defaultCollapsed?: boolean;
-  /** Default sort order */
-  defaultSortBy?: string;
-  defaultOrder?: 'asc' | 'desc';
-  /** Search form span multiplier: number or ComputedRef (default: auto computed based on screen width) */
-  searchSpanMultiplier?: number | ComputedRef<number> | 'auto';
-  /** Auto handle URL date parameter (e.g., ?date=today) */
-  dateParamOptions?: false | DateParamOptions<SearchParams>;
+type PaginationParams = Pick<PaginationProps, 'page' | 'pageSize'>;
+
+type PaginatedRequestParams<SearchParams extends object> = SearchParams & {
+  current: number;
+  size: number;
+  sorting?: string;
 };
 
-/**
- * Hook for pro-naive-ui paginated table
- *
- * Wraps useNDataTable with common patterns
- */
-export function useProPaginatedTable<ApiData, SearchParams extends Record<string, any> = Record<string, never>>(
-  options: UseProPaginatedTableOptions<ApiData, SearchParams>
-) {
-  const {
-    api,
-    columns,
-    searchColumns,
-    initialSearchValues,
-    extraParams,
-    defaultCurrent = 1,
-    defaultPageSize = 10,
-    defaultCollapsed = true,
-    defaultSortBy,
-    defaultOrder,
-    searchSpanMultiplier = 'auto',
-    dateParamOptions
-  } = options;
+type SearchInitialValues<SearchParams extends object> = Partial<PaginatedRequestParams<SearchParams>>;
 
-  const route = useRoute();
+type SearchOnceValues<SearchParams extends object> = Partial<{
+  [Key in keyof SearchParams]: SearchParams[Key] | string | number | boolean | null;
+}>;
 
-  // 自动计算 span 倍数（基于屏幕宽度）
-  const breakpoints = useBreakpoints(breakpointsTailwind);
-  const autoSpanMultiplier = computed(() => {
-    if (breakpoints.smaller('2xl').value) return 2;
-    return 1;
-  });
+type TableSorter = {
+  columnKey?: string | number;
+  order?: 'ascend' | 'descend' | false | null;
+};
 
-  // 确定最终使用的 span 倍数
-  const finalSpanMultiplier = computed(() => {
-    if (searchSpanMultiplier === 'auto') {
-      return autoSpanMultiplier.value;
-    }
-    return toValue(searchSpanMultiplier);
-  });
+type DefaultPaginatedResponseData<ApiData> = FlatResponseData<
+  App.Service.Response<Api.Common.PaginatingQueryRecord<ApiData>>,
+  Api.Common.PaginatingQueryRecord<ApiData>
+>;
 
-  // Create search form
-  const searchForm = createProSearchForm<SearchParams>({
-    defaultCollapsed,
-    initialValues: initialSearchValues ?? ({} as SearchParams)
-  });
+type FieldTransformer<TableData extends Record<string, any>> = (value: unknown, record: TableData) => unknown;
 
-  // 自动将 extraParams 填充到搜索表单中
-  if (extraParams && Object.keys(extraParams).length > 0) {
-    Object.assign(searchForm.values.value, extraParams);
-  }
-
-  // 处理 URL date 参数（如 ?date=today 或 ?date=yesterday）
-  if (dateParamOptions !== false) {
-    handleDateParam(searchForm, route.query, dateParamOptions ?? undefined);
-  }
-
-  // Sort state: format "field-order", e.g., "id-descend", "created_at-ascend"
-  const sorting = ref<string | undefined>(
-    defaultSortBy && defaultOrder ? `${defaultSortBy}-${defaultOrder === 'asc' ? 'ascend' : 'descend'}` : undefined
-  );
-
-  // Fetch function for useNDataTable
-  async function fetchList(
-    params: { current: number; pageSize: number },
-    values: SearchParams
-  ): Promise<{ total: number; list: ApiData[] }> {
-    // Call API with pagination + sort + extra params (filtered) + search values
-    const response = await api({
-      current: params.current,
-      size: params.pageSize,
-      sorting: sorting.value,
-      ...filterNullish(extraParams ?? {}),
-      ...filterNullish(searchForm.values.value),
-      ...values
-    } as { current: number; size: number } & SearchParams);
-
-    if (response.error) {
-      throw response.error;
-    }
-
-    if (!response.data) {
-      return { total: 0, list: [] };
-    }
-
-    return {
-      total: response.data.total,
-      list: response.data.records
-    };
-  }
-
-  // Use pro-naive-ui's useNDataTable
-  const { table, search } = useNDataTable(
-    ({ current, pageSize }, values) => fetchList({ current, pageSize }, values as SearchParams),
-    {
-      form: searchForm,
-      defaultCurrent,
-      defaultPageSize
-    }
-  );
-
-  // Extract table properties
-  const { tableProps, onChange } = table;
-  const { proSearchFormProps } = search;
-
-  // Data and loading are accessed from tableProps
-  const data = computed(() => tableProps.value.data as ApiData[]);
-  const loading = computed(() => tableProps.value.loading);
-
-  // Column checks for TableHeaderOperation
-  const columnChecks = ref<TableColumnCheck[]>(getColumnChecks(columns()));
-
-  // Filtered columns based on checks
-  const tableColumns = computed(() => {
-    const cols = columns();
-    return getFilteredColumns(cols, columnChecks.value);
-  });
-
-  // Reload column checks (e.g., when locale changes)
-  function reloadColumns() {
-    columnChecks.value = getColumnChecks(columns());
-  }
-
-  // Computed search columns with span multiplier
-  const formColumns = computed(() => {
-    const cols = searchColumns?.() ?? [];
-    const multiplier = finalSpanMultiplier.value;
-    if (multiplier === 1) {
-      return cols;
-    }
-    return cols.map(col => ({
-      ...col,
-      span: typeof col.span === 'number' ? col.span * multiplier : col.span
-    }));
-  });
-
-  // Get data by page
-  async function getDataByPage(page: number = 1) {
-    await onChange({ page });
-  }
-
-  // Refresh data
-  async function getData() {
-    await onChange();
-  }
-
-  // Update search values and trigger query
-  function updateSearchValues(values: Partial<SearchParams>, triggerSearch = true) {
-    Object.assign(searchForm.values.value, values);
-    if (triggerSearch) {
-      getDataByPage(1);
-    }
-  }
-
-  // Handle NaiveUI table sorter change
-  function onSortChange(sorter: { columnKey: string; order: 'ascend' | 'desc' | null }) {
-    sorting.value = sorter.order ? `${sorter.columnKey}-${sorter.order}` : undefined;
-  }
-
-  return {
-    // Table related
-    columns: tableColumns,
-    columnChecks,
-    data,
-    loading,
-    tableProps,
-    // Search related
-    searchForm,
-    search,
-    searchColumns: formColumns,
-    proSearchFormProps,
-    // Sort related
-    sorting,
-    onSortChange,
-    // Methods
-    getData,
-    getDataByPage,
-    reload: onChange,
-    reloadColumns,
-    updateSearchValues
-  };
-}
-
-type FieldTransformer = (value: any, record?: any) => any;
-
-type UseProTableOperateOptions<
+type UseTableOperateOptions<
   TableData extends Record<string, any>,
   FormData extends Record<string, any>,
-  OperateType extends string
+  OperateType extends string,
+  IdKey extends keyof TableData
 > = {
-  /** 表格数据 */
   data: Ref<TableData[]>;
-  /** 主键字段名 */
-  idKey: keyof TableData;
-  /** 刷新数据方法 */
+  idKey: IdKey;
   getData: () => Promise<void>;
-  /** 表单提交回调 */
   onSubmit?: (
     values: FormData,
     type: OperateType,
     form: ReturnType<typeof createProModalForm<FormData>>
   ) => Promise<void>;
-  /** 删除操作回调 */
-  onDelete?: (id: number) => Promise<{ error?: string | null }>;
-  /** 提交成功后的消息提示 */
+  onDelete?: (id: TableData[IdKey]) => Promise<{ error?: unknown }>;
   successMessage?: Partial<Record<OperateType, string>>;
-  /** 字段类型转换配置 */
-  fieldTypeTransform?: Record<string, FieldTransformer>;
-  /** 表单值变化回调（手动交互触发） */
+  fieldTypeTransform?: Record<string, FieldTransformer<TableData>>;
   onValueChange?: (
-    opt: { value: any; path: string },
+    opt: { value: unknown; path: string },
     form: ReturnType<typeof createProModalForm<FormData>>,
     operateType: OperateType
   ) => void;
 };
 
-/**
- * 表格行操作的 Hook（模态框表单）
- */
-export function useProTableOperate<
+type UseNaivePaginatedTableOptions<
+  ApiData,
+  SearchParams extends object = Record<string, never>,
+  ResponseData = DefaultPaginatedResponseData<ApiData>
+> = Omit<UseNaiveTableOptions<ResponseData, ApiData, true>, 'api' | 'transform'> & {
+  api: (params: PaginatedRequestParams<SearchParams>) => Promise<ResponseData>;
+  searchColumns?: () => ProSearchFormColumns<SearchParams>;
+  searchInitialValues?: SearchInitialValues<SearchParams>;
+  searchOnceValues?: SearchOnceValues<SearchParams>;
+  searchDefaultCollapsed?: boolean;
+  defaultSortBy?: string;
+  defaultOrder?: 'asc' | 'desc';
+  transform?: UseNaiveTableOptions<ResponseData, ApiData, true>['transform'];
+  paginationProps?: Omit<PaginationProps, 'page' | 'pageSize' | 'itemCount'>;
+  /**
+   * whether to show the total count of the table
+   *
+   * @default true
+   */
+  showTotal?: boolean;
+  onPaginationParamsChange?: (params: PaginationParams) => void | Promise<void>;
+};
+
+const SELECTION_KEY = '__selection__';
+
+const EXPAND_KEY = '__expand__';
+
+export function useNaiveTable<ResponseData, ApiData>(options: UseNaiveTableOptions<ResponseData, ApiData, false>) {
+  const scope = effectScope();
+  const appStore = useAppStore();
+
+  const result = useTable<ResponseData, ApiData, NaiveUI.TableColumn<ApiData>, false>({
+    ...options,
+    getColumnChecks: cols => getColumnChecks(cols, options.getColumnVisible),
+    getColumns
+  });
+
+  // calculate the total width of the table this is used for horizontal scrolling
+  const scrollX = computed(() => getScrollX(result.columns.value));
+
+  scope.run(() => {
+    watch(
+      () => appStore.locale,
+      () => {
+        result.reloadColumns();
+      }
+    );
+  });
+
+  onScopeDispose(() => {
+    scope.stop();
+  });
+
+  return {
+    ...result,
+    scrollX
+  };
+}
+
+export function useNaivePaginatedTable<
+  ApiData,
+  SearchParams extends object = Record<string, never>,
+  ResponseData = DefaultPaginatedResponseData<ApiData>
+>(options: UseNaivePaginatedTableOptions<ApiData, SearchParams, ResponseData>) {
+  const scope = effectScope();
+  const appStore = useAppStore();
+  const initialSearchParams = { ...(options.searchInitialValues ?? {}) };
+  const { current: initialCurrent, size: initialSize, ...searchFormInitialValues } = initialSearchParams;
+  const resolvedPageSize = Number(initialSize ?? 10);
+  const searchOnceValues = omitNilFields(options.searchOnceValues ?? {});
+  const hasSearchOnceValues = Object.keys(searchOnceValues).length > 0;
+  const shouldAutoFetch = options.immediate ?? true;
+  const breakpoints = useBreakpoints(breakpointsTailwind);
+  const sorting = shallowRef<string | undefined>(
+    options.defaultSortBy && options.defaultOrder
+      ? `${options.defaultSortBy}-${options.defaultOrder === 'asc' ? 'ascend' : 'descend'}`
+      : undefined
+  );
+
+  const isMobile = computed(() => appStore.isMobile);
+
+  const showTotal = computed(() => options.showTotal ?? true);
+
+  const pagination = reactive({
+    page: Number(initialCurrent ?? 1),
+    pageSize: resolvedPageSize,
+    itemCount: 0,
+    showSizePicker: true,
+    pageSizes: [10, 15, 20, 25, 30],
+    prefix: showTotal.value ? page => $t('datatable.itemCount', { total: page.itemCount }) : undefined,
+    onUpdatePage(page) {
+      pagination.page = page;
+    },
+    onUpdatePageSize(pageSize) {
+      pagination.pageSize = pageSize;
+      pagination.page = 1;
+    },
+    ...options.paginationProps
+  }) as PaginationProps;
+
+  // this is for mobile, if the system does not support mobile, you can use `pagination` directly
+  const mobilePagination = computed(() => {
+    const p: PaginationProps = {
+      ...pagination,
+      pageSlot: isMobile.value ? 3 : 9,
+      prefix: !isMobile.value && showTotal.value ? pagination.prefix : undefined
+    };
+
+    return p;
+  });
+
+  const paginationParams = computed(() => {
+    const { page, pageSize } = pagination;
+
+    return {
+      page,
+      pageSize
+    };
+  });
+
+  const searchForm = createProSearchForm<SearchParams>({
+    initialValues: searchFormInitialValues as SearchParams,
+    defaultCollapsed: options.searchDefaultCollapsed,
+    async onSubmit() {
+      await getDataByPage(1);
+    },
+    async onReset() {
+      await getDataByPage(1);
+    }
+  });
+
+  const requestParams = computed<PaginatedRequestParams<SearchParams>>(() => {
+    return {
+      ...(sorting.value ? { sorting: sorting.value } : {}),
+      ...omitNilFields(searchForm.values.value as SearchParams),
+      current: Number(pagination.page ?? 1),
+      size: Number(pagination.pageSize ?? resolvedPageSize)
+    } as PaginatedRequestParams<SearchParams>;
+  });
+
+  const result = useTable<ResponseData, ApiData, NaiveUI.TableColumn<ApiData>, true>({
+    ...options,
+    api: () => options.api(requestParams.value),
+    immediate: hasSearchOnceValues ? false : shouldAutoFetch,
+    transform:
+      options.transform ??
+      ((response: ResponseData) =>
+        defaultTransform(
+          response as FlatResponseData<
+            App.Service.Response<Api.Common.PaginatingQueryRecord<ApiData>>,
+            Api.Common.PaginatingQueryRecord<ApiData>
+          >
+        )),
+    pagination: true,
+    getColumnChecks: cols => getColumnChecks(cols, options.getColumnVisible),
+    getColumns,
+    onFetched: data => {
+      pagination.itemCount = data.total;
+    }
+  });
+
+  if (hasSearchOnceValues) {
+    Object.assign(searchForm.values.value, searchOnceValues);
+
+    if (shouldAutoFetch) {
+      result.getData();
+    }
+  }
+
+  const scrollX = computed(() => getScrollX(result.columns.value));
+
+  const searchColumns = computed(() => {
+    const cols = options.searchColumns?.() ?? [];
+    const spanMultiplier = breakpoints.smaller('2xl').value ? 2 : 1;
+
+    if (spanMultiplier === 1) {
+      return cols;
+    }
+
+    return cols.map(column => ({
+      ...column,
+      span: typeof column.span === 'number' ? column.span * spanMultiplier : column.span
+    }));
+  });
+
+  const searchFormProps = computed(() => {
+    return {};
+  });
+
+  const tableProps = computed(() => {
+    return {
+      data: result.data.value,
+      loading: result.loading.value,
+      remote: true,
+      pagination: mobilePagination.value,
+      scrollX: scrollX.value
+    };
+  });
+
+  async function getDataByPage(page: number = 1) {
+    if (page !== pagination.page) {
+      pagination.page = page;
+
+      return;
+    }
+
+    await result.getData();
+  }
+
+  function searchUpdateValues(values: Partial<SearchParams>, triggerSearch = true) {
+    Object.assign(searchForm.values.value, values);
+
+    if (triggerSearch) {
+      return getDataByPage(1);
+    }
+
+    return Promise.resolve();
+  }
+
+  async function updateSorting(sorter: TableSorter | TableSorter[] | null) {
+    const currentSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+
+    sorting.value =
+      currentSorter?.order && currentSorter.columnKey
+        ? `${String(currentSorter.columnKey)}-${currentSorter.order}`
+        : undefined;
+
+    await getDataByPage(1);
+  }
+
+  scope.run(() => {
+    watch(
+      () => appStore.locale,
+      () => {
+        result.reloadColumns();
+      }
+    );
+
+    watch(paginationParams, async newVal => {
+      await options.onPaginationParamsChange?.(newVal);
+
+      await result.getData();
+    });
+  });
+
+  onScopeDispose(() => {
+    scope.stop();
+  });
+
+  return {
+    ...result,
+    scrollX,
+    searchForm,
+    searchColumns,
+    searchUpdateValues,
+    searchFormProps,
+    tableProps,
+    updateSorting,
+    getDataByPage,
+    sorting,
+    pagination,
+    mobilePagination
+  };
+}
+
+export function useTableOperate<
   TableData extends Record<string, any>,
   FormData extends Record<string, any> = TableData,
-  OperateType extends string = NaiveUI.TableOperateType
->(options: UseProTableOperateOptions<TableData, FormData, OperateType>) {
+  OperateType extends string = NaiveUI.TableOperateType,
+  IdKey extends keyof TableData = keyof TableData
+>(options: UseTableOperateOptions<TableData, FormData, OperateType, IdKey>) {
   const { data, idKey, getData, onSubmit, onDelete, successMessage, fieldTypeTransform, onValueChange } = options;
   const { loading: formLoading, startLoading, endLoading } = useLoading(false);
 
@@ -281,23 +356,22 @@ export function useProTableOperate<
   /** the editing row data */
   const editingData = shallowRef<TableData | null>(null);
 
-  const modalForm = createProModalForm<FormData>({
+  const form = createProModalForm<FormData>({
     onValueChange: opt => {
-      if (onValueChange) {
-        onValueChange(opt, modalForm, operateType.value);
-      }
+      onValueChange?.(opt, form, operateType.value);
     },
     onSubmit: async values => {
       if (!onSubmit) return;
+
       startLoading();
+
       try {
-        await onSubmit(values, operateType.value, modalForm);
+        await onSubmit(values, operateType.value, form);
 
-        // 成功后关闭弹窗
-        modalForm.show.value = false;
+        form.show.value = false;
 
-        // 显示成功消息
         const customMessage = successMessage?.[operateType.value as OperateType];
+
         if (customMessage) {
           window.$message?.success(customMessage);
         } else if (operateType.value === 'add') {
@@ -307,164 +381,168 @@ export function useProTableOperate<
         }
 
         await getData();
-      } catch {
-        // 请求失败时不关闭弹窗，错误提示由请求层处理
       } finally {
         endLoading();
       }
     }
   });
 
-  /**
-   * 应用字段类型转换
-   */
   function applyFieldTransform<T extends Record<string, any>, R = T>(
-    // eslint-disable-next-line @typescript-eslint/no-shadow
-    data: T,
-    transforms?: Record<string, FieldTransformer>
+    source: T,
+    transforms?: Record<string, FieldTransformer<TableData>>
   ): R {
-    if (!transforms) return data as unknown as R;
+    if (!transforms) {
+      return source as unknown as R;
+    }
 
-    const result = { ...data } as Record<string, any>;
+    const result = { ...source } as Record<string, unknown>;
 
     Object.entries(transforms).forEach(([field, transformer]) => {
-      const value = data[field as keyof T];
+      const value = source[field as keyof T];
+
       if (value !== null) {
-        // Pass both value and full record to transformer
-        result[field] = transformer(value, data);
+        result[field] = transformer(value, source as unknown as TableData);
       }
     });
 
     return result as R;
   }
 
-  /**
-   * 打开表单弹窗
-   */
-  function openFormModal() {
-    modalForm.show.value = true;
+  function openForm() {
+    form.show.value = true;
   }
 
-  /** 关闭表单弹窗 */
-  function closeFormModal() {
-    modalForm.show.value = false;
+  function closeForm() {
+    form.show.value = false;
   }
 
-  /** 新增快捷方法 */
-  function handleAdd(initialValues?: Partial<FormData>) {
-    operateType.value = 'add';
+  function handleAdd(initialValues?: Partial<FormData>, type: OperateType = 'add' as OperateType) {
+    operateType.value = type;
     editingData.value = null;
-    modalForm.values.value = (initialValues ? { ...initialValues } : {}) as FormData;
+    form.values.value = (initialValues ? { ...initialValues } : {}) as FormData;
 
-    openFormModal();
+    openForm();
   }
 
-  /** 编辑快捷方法 */
-  function handleEdit(id: TableData[keyof TableData], operate: string = 'edit') {
+  function handleEdit(id: TableData[IdKey], type: OperateType = 'edit' as OperateType) {
     const findItem = data.value.find(item => item[idKey] === id) || null;
+
     if (!findItem) {
       return;
     }
 
-    operateType.value = operate;
+    operateType.value = type;
     editingData.value = jsonClone(findItem) as TableData;
-    modalForm.values.value = applyFieldTransform<TableData, FormData>(editingData.value, fieldTypeTransform);
+    form.values.value = applyFieldTransform<TableData, FormData>(editingData.value, fieldTypeTransform);
 
-    openFormModal();
+    openForm();
   }
 
   /** the checked row keys of table */
-  const checkedRowKeys = shallowRef<string[] | number[]>([]);
+  const checkedRowKeys = shallowRef<Array<string | number>>([]);
 
   /** the hook after the batch delete operation is completed */
   async function onBatchDeleted() {
     window.$message?.success($t('common.deleteSuccess'));
+
     checkedRowKeys.value = [];
+
     await getData();
   }
 
   /** the hook after the delete operation is completed */
   async function onDeleted() {
     window.$message?.success($t('common.deleteSuccess'));
+
     await getData();
   }
 
-  /** 删除快捷方法 */
-  async function handleDelete(id: number) {
+  async function handleDelete(id: TableData[IdKey]) {
     if (!onDelete) {
       throw new Error('onDelete callback is required for handleDelete');
     }
 
     const { error } = await onDelete(id);
+
     if (error) {
       throw error;
     }
 
-    // 显示成功消息
     window.$message?.success($t('common.deleteSuccess'));
 
-    // 刷新数据
     await getData();
   }
 
   return {
-    /** 操作类型 */
     operateType,
-    /** modal 表单实例 */
-    modalForm,
-    /** 表单加载状态 */
+    form,
     formLoading,
-    /** 打开表单弹窗（支持自定义类型） */
-    openFormModal,
-    /** 关闭表单弹窗 */
-    closeFormModal,
-    /** 新增快捷方法 */
+    openForm,
+    closeForm,
     handleAdd,
-    /** 编辑快捷方法 */
-    handleEdit,
-    /** 删除快捷方法 */
-    handleDelete,
-    /** 编辑中的行数据 */
     editingData,
-    /** 选中的行 keys */
+    handleEdit,
+    handleDelete,
     checkedRowKeys,
-    /** 批量删除后回调 */
     onBatchDeleted,
-    /** 删除后回调 */
     onDeleted
   };
 }
 
-// ===================== Helper Functions =====================
+export function defaultTransform<ApiData>(
+  response: FlatResponseData<
+    App.Service.Response<Api.Common.PaginatingQueryRecord<ApiData>>,
+    Api.Common.PaginatingQueryRecord<ApiData>
+  >
+): PaginationData<ApiData> {
+  const { data, error } = response;
 
-const SELECTION_KEY = '__selection__';
-const EXPAND_KEY = '__expand__';
+  if (!error) {
+    const { records, current, size, total } = data;
 
-/** 从列定义生成 columnChecks */
-function getColumnChecks<T>(cols: ProDataTableColumns<T>): TableColumnCheck[] {
+    return {
+      data: records,
+      pageNum: current,
+      pageSize: size,
+      total
+    };
+  }
+
+  return {
+    data: [],
+    pageNum: 1,
+    pageSize: 10,
+    total: 0
+  };
+}
+
+function getColumnChecks<TableData>(
+  cols: NaiveUI.TableColumn<TableData>[],
+  getColumnVisible?: (column: NaiveUI.TableColumn<TableData>) => boolean
+) {
   const checks: TableColumnCheck[] = [];
 
   cols.forEach(column => {
-    if ('key' in column && column.key) {
+    if (isTableColumnHasKey(column)) {
       checks.push({
         key: column.key as string,
-        title: column.title as string,
+        title: column.title!,
         checked: true,
-        visible: true
+        visible: getColumnVisible?.(column) ?? true
       });
-    } else if ('type' in column && column.type === 'selection') {
+    } else if (column.type === 'selection') {
       checks.push({
         key: SELECTION_KEY,
         title: $t('common.check'),
         checked: true,
-        visible: false
+        visible: getColumnVisible?.(column) ?? false
       });
-    } else if ('type' in column && column.type === 'expand') {
+    } else if (column.type === 'expand') {
       checks.push({
         key: EXPAND_KEY,
         title: $t('common.expandColumn'),
         checked: true,
-        visible: false
+        visible: getColumnVisible?.(column) ?? false
       });
     }
   });
@@ -472,51 +550,38 @@ function getColumnChecks<T>(cols: ProDataTableColumns<T>): TableColumnCheck[] {
   return checks;
 }
 
-/** 根据 columnChecks 过滤并排序列 */
-function getFilteredColumns<T>(cols: ProDataTableColumns<T>, checks: TableColumnCheck[]): ProDataTableColumns<T> {
-  // 创建列映射
-  const columnMap = new Map<string, ProDataTableColumns<T>[number]>();
+function getColumns<TableData>(cols: NaiveUI.TableColumn<TableData>[], checks: TableColumnCheck[]) {
+  const columnMap = new Map<string, NaiveUI.TableColumn<TableData>>();
+
   cols.forEach(column => {
-    if ('key' in column && column.key) {
+    if (isTableColumnHasKey(column)) {
       columnMap.set(column.key as string, column);
-    } else if ('type' in column && column.type === 'selection') {
+    } else if (column.type === 'selection') {
       columnMap.set(SELECTION_KEY, column);
-    } else if ('type' in column && column.type === 'expand') {
+    } else if (column.type === 'expand') {
       columnMap.set(EXPAND_KEY, column);
     }
   });
 
-  // 按 checks 顺序返回已勾选的列
-  return checks.filter(check => check.checked && columnMap.has(check.key)).map(check => columnMap.get(check.key)!);
+  const filteredColumns = checks
+    .filter(item => item.checked)
+    .map(check => columnMap.get(check.key) as NaiveUI.TableColumn<TableData>);
+
+  return filteredColumns;
 }
 
-/** 日期参数映射：天数偏移 */
-const DATE_OFFSET_MAP: Record<string, number> = {
-  today: 0,
-  yesterday: 1
-};
+export function isTableColumnHasKey<T>(column: NaiveUI.TableColumn<T>): column is NaiveUI.TableColumnWithKey<T> {
+  return Boolean((column as NaiveUI.TableColumnWithKey<T>).key);
+}
 
-/** 处理 URL date 参数，自动设置日期范围 */
-function handleDateParam<SearchParams extends Record<string, any>>(
-  searchForm: ReturnType<typeof createProSearchForm<SearchParams>>,
-  query: Record<string, any>,
-  options?: DateParamOptions<SearchParams>
-) {
-  const paramName = options?.paramName || 'date';
-  const targetField = String(options?.targetField || 'created_at');
-  const dateValue = query[paramName];
+function omitNilFields<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => value !== null && value !== undefined)
+  ) as Partial<T>;
+}
 
-  // 检查 date 参数是否有效
-  if (typeof dateValue !== 'string' || !(dateValue in DATE_OFFSET_MAP)) {
-    return;
-  }
-
-  // 计算日期范围
-  const days = DATE_OFFSET_MAP[dateValue];
-  const dateRange = [getDateSubtract(days, 'start'), getDateSubtract(days, 'end')];
-
-  // 设置日期范围到表单字段
-  if (targetField in searchForm.values.value) {
-    (searchForm.values.value as Record<string, any>)[targetField] = dateRange;
-  }
+function getScrollX<T>(columns: NaiveUI.TableColumn<T>[], minWidth: number = 120) {
+  return columns.reduce((acc, column) => {
+    return acc + Number(column.width ?? column.minWidth ?? minWidth);
+  }, 0);
 }

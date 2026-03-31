@@ -1,8 +1,9 @@
 <script setup lang="tsx">
 import { userStatusLabels, userStatusOptions } from '@/constants/business';
 import { fetchUserList } from '@/service/api';
-import { useProPaginatedTable } from '@/hooks/common/pro-table';
-import { toDatetimeRangeFieldProps } from '@/utils/date';
+import { useNaivePaginatedTable } from '@/hooks/common/pro-table';
+import { parseDateShortcutRange, toDatetimeRangeFieldProps } from '@/utils/date';
+import { getRouteQueryParam, parseNumberParam } from '@/utils/common';
 import TableActions from './components/table-actions.vue';
 import TableExpand from './components/table-expand.vue';
 
@@ -13,14 +14,14 @@ const {
   tableProps,
   searchForm,
   searchColumns,
-  proSearchFormProps,
+  searchFormProps,
   getData,
-  onSortChange
-} = useProPaginatedTable<Api.User.User, Api.User.UserSearchParams>({
+  updateSorting
+} = useNaivePaginatedTable<Api.User.User, Api.User.UserSearchParams>({
   api: fetchUserList,
-  defaultCurrent: 1,
-  defaultPageSize: 20,
-  initialSearchValues: {
+  searchInitialValues: {
+    current: 1,
+    size: 20,
     id: null,
     uuid: null,
     username: null,
@@ -28,6 +29,10 @@ const {
     email: null,
     status: null,
     created_at: null
+  },
+  searchOnceValues: {
+    id: getRouteQueryParam('id', parseNumberParam),
+    created_at: parseDateShortcutRange(getRouteQueryParam('date'))
   },
   searchColumns: () => [
     {
@@ -171,9 +176,9 @@ const {
   <ConfigProvider>
     <NFlex class="h-full" vertical size="large">
       <ProCard title="筛选条件" class="mb-10px" content-class="pb-0!">
-        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="proSearchFormProps" />
+        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="searchFormProps" />
       </ProCard>
-      <ProDataTable title="用户列表" row-key="id" v-bind="tableProps" :columns="columns" @update:sorter="onSortChange">
+      <ProDataTable title="用户列表" row-key="id" v-bind="tableProps" :columns="columns" @update:sorter="updateSorting">
         <template #toolbar>
           <TableHeaderOperation
             v-model:columns="columnChecks"

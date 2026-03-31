@@ -70,6 +70,23 @@ export function getDateSubtractTimestamp(days: number = 1, type: 'start' | 'end'
   return dateToTimestamp(dateStr);
 }
 
+/**
+ * 解析日期快捷值为完整的时间范围
+ * @param value 快捷值，支持 today 和 yesterday
+ * @returns 对应的开始和结束时间，无法识别时返回 null
+ */
+export function parseDateShortcutRange(value: string | null | undefined): [string, string] | null {
+  if (value === 'today') {
+    return [getDateSubtract(0, 'start'), getDateSubtract(0, 'end')];
+  }
+
+  if (value === 'yesterday') {
+    return [getDateSubtract(1, 'start'), getDateSubtract(1, 'end')];
+  }
+
+  return null;
+}
+
 export function toDatetimeRangeFieldProps() {
   return {
     valueFormat: 'yyyy-MM-dd HH:mm:ss',

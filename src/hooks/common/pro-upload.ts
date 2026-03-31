@@ -1,6 +1,13 @@
 import { computed, ref } from 'vue';
 import type { UploadFileInfo, UploadProps } from 'naive-ui';
-import { fetchUploadConfig } from '@/service/api';
+import { getUploadConfig } from '@/service/api';
+
+type UploadConfig = {
+  url: string;
+  method: string;
+  name: string;
+  form?: Record<string, string | Blob>;
+};
 
 /**
  * 将后端返回的文件路径批量转换为 UploadFileInfo 格式
@@ -44,7 +51,7 @@ export function getUploadFileValue(files: UploadFileInfo[], multiple = false): s
  * @param uploadConfig - 上传配置对象
  * @returns ProUpload field-props
  */
-function getUploadConfigProps(uploadConfig: Api.System.UploadConfig): UploadProps {
+function getUploadConfigProps(uploadConfig: UploadConfig): UploadProps {
   return {
     action: uploadConfig.url,
     method: uploadConfig.method as 'POST',
@@ -78,10 +85,10 @@ function getUploadConfigProps(uploadConfig: Api.System.UploadConfig): UploadProp
  * ```
  */
 export function useProUpload() {
-  const uploadConfig = ref<Api.System.UploadConfig | null>(null);
+  const uploadConfig = ref<UploadConfig | null>(null);
 
   async function initUploadConfig() {
-    const { data } = await fetchUploadConfig();
+    const { data } = await getUploadConfig();
     if (data) {
       uploadConfig.value = data;
     }

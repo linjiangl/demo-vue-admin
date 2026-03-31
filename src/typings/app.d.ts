@@ -565,6 +565,21 @@ declare namespace App {
           editTitle: string;
           confirmDelete: string;
         };
+        manageAdminMenu: {
+          title: string;
+          name: string;
+          parent: string;
+          type: string;
+          icon: string;
+          routeName: string;
+          routePath: string;
+          component: string;
+          sorting: string;
+          status: string;
+          addTitle: string;
+          editTitle: string;
+          confirmDelete: string;
+        };
       };
       form: {
         required: string;

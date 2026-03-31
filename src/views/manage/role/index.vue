@@ -2,7 +2,7 @@
 import { NButton, NPopconfirm, NSpace, NTag } from 'naive-ui';
 import { createAdminRole, destroyAdminRole, fetchAdminRoleList, updateAdminRole } from '@/service/api';
 import { useAppStore } from '@/store/modules/app';
-import { useProPaginatedTable, useProTableOperate } from '@/hooks/common/pro-table';
+import { useNaivePaginatedTable, useTableOperate } from '@/hooks/common/pro-table';
 import { $t } from '@/locales';
 import RoleForm from './components/role-form.vue';
 
@@ -17,12 +17,12 @@ const operateTypeTitle: Record<NaiveUI.TableOperateType, string> = {
   edit: $t('page.manageAdminRole.editTitle')
 };
 
-const { columns, columnChecks, data, loading, tableProps, searchForm, searchColumns, proSearchFormProps, getData } =
-  useProPaginatedTable<Api.SystemManage.AdminRole, Api.SystemManage.AdminRoleSearchParams>({
+const { columns, columnChecks, data, loading, tableProps, searchForm, searchColumns, searchFormProps, getData } =
+  useNaivePaginatedTable<Api.SystemManage.AdminRole, Api.SystemManage.AdminRoleSearchParams>({
     api: fetchAdminRoleList,
-    defaultCurrent: 1,
-    defaultPageSize: 20,
-    initialSearchValues: {
+    searchInitialValues: {
+      current: 1,
+      size: 20,
       name: null,
       identifier: null,
       status: null
@@ -139,10 +139,11 @@ const { columns, columnChecks, data, loading, tableProps, searchForm, searchColu
     ]
   });
 
-const { operateType, modalForm, formLoading, handleAdd, handleEdit, handleDelete } = useProTableOperate<
+const { operateType, form, formLoading, handleAdd, handleEdit, handleDelete } = useTableOperate<
   Api.SystemManage.AdminRole,
   Api.SystemManage.AdminRole,
-  NaiveUI.TableOperateType
+  NaiveUI.TableOperateType,
+  'id'
 >({
   data,
   idKey: 'id',
@@ -181,7 +182,7 @@ function remove(id: number) {
   <ConfigProvider>
     <NFlex class="h-full" vertical size="large">
       <ProCard title="筛选条件" class="mb-10px" content-class="pb-0!">
-        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="proSearchFormProps" />
+        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="searchFormProps" />
       </ProCard>
       <ProDataTable title="角色列表" row-key="id" v-bind="tableProps" :columns="columns">
         <template #toolbar>
@@ -189,7 +190,7 @@ function remove(id: number) {
         </template>
       </ProDataTable>
       <ProDrawerForm
-        :form="modalForm"
+        :form="form"
         label-placement="left"
         label-align="right"
         label-width="120"

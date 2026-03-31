@@ -2,7 +2,7 @@
 import { NButton, NPopconfirm, NSpace, NTag } from 'naive-ui';
 import { createAdminMenu, destroyAdminMenu, fetchAdminMenuList, updateAdminMenu } from '@/service/api';
 import { useAppStore } from '@/store/modules/app';
-import { useProPaginatedTable, useProTableOperate } from '@/hooks/common/pro-table';
+import { useNaivePaginatedTable, useTableOperate } from '@/hooks/common/pro-table';
 import { $t } from '@/locales';
 import MenuForm from './components/menu-form.vue';
 
@@ -23,12 +23,12 @@ const menuTypeOptions = [
   { label: '按钮', value: 'button' }
 ];
 
-const { columns, columnChecks, data, loading, tableProps, searchForm, searchColumns, proSearchFormProps, getData } =
-  useProPaginatedTable<Api.SystemManage.AdminMenu, Api.SystemManage.AdminMenuSearchParams>({
+const { columns, columnChecks, data, loading, tableProps, searchForm, searchColumns, searchFormProps, getData } =
+  useNaivePaginatedTable<Api.SystemManage.AdminMenu, Api.SystemManage.AdminMenuSearchParams>({
     api: fetchAdminMenuList,
-    defaultCurrent: 1,
-    defaultPageSize: 20,
-    initialSearchValues: {
+    searchInitialValues: {
+      current: 1,
+      size: 20,
       name: null,
       type: null,
       status: null
@@ -181,10 +181,11 @@ const { columns, columnChecks, data, loading, tableProps, searchForm, searchColu
     ]
   });
 
-const { operateType, modalForm, formLoading, handleAdd, handleEdit, handleDelete } = useProTableOperate<
+const { operateType, form, formLoading, handleAdd, handleEdit, handleDelete } = useTableOperate<
   Api.SystemManage.AdminMenu,
   Api.SystemManage.AdminMenu,
-  NaiveUI.TableOperateType
+  NaiveUI.TableOperateType,
+  'id'
 >({
   data,
   idKey: 'id',
@@ -223,7 +224,7 @@ function remove(id: number) {
   <ConfigProvider>
     <NFlex class="h-full" vertical size="large">
       <ProCard title="筛选条件" class="mb-10px" content-class="pb-0!">
-        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="proSearchFormProps" />
+        <ProSearchForm :form="searchForm" :columns="searchColumns" v-bind="searchFormProps" />
       </ProCard>
       <ProDataTable title="菜单列表" row-key="id" v-bind="tableProps" :columns="columns">
         <template #toolbar>
@@ -231,7 +232,7 @@ function remove(id: number) {
         </template>
       </ProDataTable>
       <ProDrawerForm
-        :form="modalForm"
+        :form="form"
         label-placement="left"
         label-align="right"
         label-width="120"

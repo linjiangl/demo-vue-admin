@@ -3,7 +3,6 @@ import { nextTick, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
 import type { DropdownMixedOption } from 'naive-ui/es/dropdown/src/interface';
 import { updateUser } from '@/service/api';
-import { useRouterPush } from '@/hooks/common/router';
 
 interface Props {
   user: Api.User.User;
@@ -13,7 +12,6 @@ interface Emits {
   (e: 'reload'): void;
 }
 
-const { routerPushByKey } = useRouterPush();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -25,12 +23,6 @@ const options = ref<DropdownMixedOption[]>(initOptions(props.user.status));
 function handleSelect(key: string) {
   // eslint-disable-next-line default-case
   switch (key) {
-    case 'user_authorize':
-      routerPushByKey('user_authorize', { query: { user_id: props.user.id.toString() } });
-      break;
-    case 'user_device':
-      routerPushByKey('user_device', { query: { user_id: props.user.id.toString() } });
-      break;
     case 'status_disabled':
       updateStatus(0);
       break;
@@ -64,16 +56,7 @@ function updateStatus(status: number) {
 }
 
 function initOptions(status: number) {
-  const optionList = [
-    {
-      label: '授权列表',
-      key: 'user_authorize'
-    },
-    {
-      label: '设备列表',
-      key: 'user_device'
-    }
-  ];
+  const optionList: DropdownMixedOption[] = [];
 
   if (status === 1) {
     optionList.push({

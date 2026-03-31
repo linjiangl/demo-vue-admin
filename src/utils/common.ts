@@ -2,6 +2,10 @@ import type { LocationQueryValue } from 'vue-router';
 import { useRoute } from 'vue-router';
 import { $t } from '@/locales';
 
+type Nullish = null | undefined;
+
+type RouteQueryParser<T> = (value: string) => T;
+
 /**
  * Filter out null and undefined values from object
  *
@@ -11,11 +15,9 @@ import { $t } from '@/locales';
  *   const filtered = filterNullish(obj);
  *   // { a: 1, d: 'hello' }
  *   ```
- *
- * @param obj
  */
-export function filterNullish<T extends Record<string, any>>(obj: T): Partial<T> {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null)) as Partial<T>;
+export function filterNullish<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => !isNullish(value))) as Partial<T>;
 }
 
 /**
@@ -28,20 +30,39 @@ export function filterNullish<T extends Record<string, any>>(obj: T): Partial<T>
  *   getRouteQueryParams('id'); // { id: '123' }
  *   getRouteQueryParams('id', 'name'); // { id: '123', name: 'test' }
  *   ```
- *
- * @param keys - specific keys to extract, if empty returns all
  */
-export function getRouteQueryParams(...keys: string[]): Record<string, string> {
+export function getRouteQueryParams<Key extends string>(...keys: Key[]): Partial<Record<Key, string>> {
   const route = useRoute();
-  const result: Record<string, string | null> = {};
-  const entries = keys.length > 0 ? keys.map(k => [k, route.query[k]]) : Object.entries(route.query);
+  const result: Partial<Record<Key, string | null>> = {};
+  const entries =
+    keys.length > 0 ? keys.map(key => [key, route.query[key]] as const) : (Object.entries(route.query) as [Key, unknown][]);
 
   for (const [key, value] of entries) {
-    const v = value as LocationQueryValue | LocationQueryValue[];
-    result[key as string] = Array.isArray(v) ? v[0] : v;
+    result[key] = getSingleRouteQueryValue(value);
   }
 
-  return filterNullish(result) as Record<string, string>;
+  return filterNullish(result) as Partial<Record<Key, string>>;
+}
+
+/**
+ * 获取单个路由查询参数，可按需转换为目标类型。
+ * @param key 查询参数名
+ * @param parser 可选的解析函数，不传时返回原始字符串
+ * @returns 解析后的值，不存在时返回 null
+ */
+export function getRouteQueryParam<T = string>(key: string, parser?: RouteQueryParser<T>): T | null {
+  const route = useRoute();
+  const value = getSingleRouteQueryValue(route.query[key]);
+
+  if (isNullish(value)) {
+    return null;
+  }
+
+  if (parser) {
+    return parser(value);
+  }
+
+  return value as T;
 }
 
 /**
@@ -72,26 +93,19 @@ export function getRouteQueryParams(...keys: string[]): Record<string, string> {
  *   //   { value: 1, label: 'label1' }
  *   // ]
  *   ```
- *
- * @param record
  */
 export function transformRecordToOption<T extends Record<string | number, string>>(record: T) {
-  return Object.entries(record).map(([value, label]) => {
-    // Check if the original key was a number
-    const numValue = Number(value);
-    const isNumberKey = Object.keys(record).some(key => key === value && !Number.isNaN(Number(key)));
+  const entries = Object.entries(record);
+  const shouldConvertToNumber = entries.length > 0 && entries.every(([value]) => isNumericKey(value));
 
-    return {
-      value: isNumberKey && !Number.isNaN(numValue) ? numValue : value,
-      label
-    };
-  }) as CommonType.Option<keyof T, T[keyof T]>[];
+  return entries.map(([value, label]) => ({
+    value: shouldConvertToNumber ? Number(value) : value,
+    label
+  })) as CommonType.Option<keyof T, T[keyof T]>[];
 }
 
 /**
  * Translate options
- *
- * @param options
  */
 export function translateOptions(options: CommonType.Option<string | number, App.I18n.I18nKey>[]) {
   return options.map(option => ({
@@ -102,8 +116,6 @@ export function translateOptions(options: CommonType.Option<string | number, App
 
 /**
  * Toggle html class
- *
- * @param className
  */
 export function toggleHtmlClass(className: string) {
   function add() {
@@ -122,25 +134,50 @@ export function toggleHtmlClass(className: string) {
 
 /**
  * 获取文件大小
- * @param bytes
  */
 export function getFileSize(bytes: number): string {
   const fileSizeUnits = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
   const base = 1024;
+
   if (bytes) {
-    let i = 0;
-    if (bytes >= base) {
-      let a = bytes;
-      while (a >= base) {
-        a /= base;
-        i += 1;
-      }
+    let index = 0;
+    let value = bytes;
+
+    while (value >= base) {
+      value /= base;
+      index += 1;
     }
-    return `${Number.parseFloat((bytes / base ** i).toFixed(2))} ${fileSizeUnits[i]}`;
+
+    return `${Number.parseFloat((bytes / base ** index).toFixed(2))} ${fileSizeUnits[index]}`;
   }
+
   return '0 KB';
 }
 
 export function openWebUrl(url: string) {
   window.open(url, '_blank', 'noopener=yes,noreferrer=yes');
+}
+
+function isNullish(value: unknown): value is Nullish {
+  return value == null;
+}
+
+function getSingleRouteQueryValue(queryValue: unknown): string | null {
+  const value = queryValue as LocationQueryValue | LocationQueryValue[];
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+export function parseNumberParam(value: string): number | null {
+  const parsed = Number(value);
+
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function isNumericKey(value: string) {
+  return value.trim() !== '' && Number.isFinite(Number(value));
 }

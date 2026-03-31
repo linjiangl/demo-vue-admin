@@ -229,7 +229,7 @@ const local: App.I18n.Schema = {
     500: 'Server Error',
     'iframe-page': 'Iframe',
     home: 'Home',
-    manage: 'Role Management',
+    manage: 'Permission Management',
     manage_admin: 'Manage Admin',
     manage_role: 'Role List',
     manage_menu: 'Menu List',
@@ -323,6 +323,21 @@ const local: App.I18n.Schema = {
       addTitle: 'Add Role',
       editTitle: 'Edit Role',
       confirmDelete: 'Are you sure to delete this role?'
+    },
+    manageAdminMenu: {
+      title: 'Menu List',
+      name: 'Menu Name',
+      parent: 'Parent Menu',
+      type: 'Menu Type',
+      icon: 'Icon',
+      routeName: 'Route Name',
+      routePath: 'Route Path',
+      component: 'Component Path',
+      sorting: 'Sorting',
+      status: 'Status',
+      addTitle: 'Add Menu',
+      editTitle: 'Edit Menu',
+      confirmDelete: 'Are you sure to delete this menu?'
     }
   },
   form: {

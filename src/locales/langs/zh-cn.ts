@@ -225,7 +225,7 @@ const local: App.I18n.Schema = {
     500: '服务器错误',
     'iframe-page': '外链页面',
     home: '首页',
-    manage: '角色管理',
+    manage: '权限管理',
     manage_admin: '管理员列表',
     manage_role: '角色列表',
     manage_menu: '菜单列表',
@@ -319,6 +319,21 @@ const local: App.I18n.Schema = {
       addTitle: '新增角色',
       editTitle: '编辑角色',
       confirmDelete: '确认删除该角色吗？'
+    },
+    manageAdminMenu: {
+      title: '菜单列表',
+      name: '菜单名称',
+      parent: '上级菜单',
+      type: '菜单类型',
+      icon: '图标',
+      routeName: '路由名称',
+      routePath: '路由路径',
+      component: '组件路径',
+      sorting: '排序',
+      status: '状态',
+      addTitle: '新增菜单',
+      editTitle: '编辑菜单',
+      confirmDelete: '确认删除该菜单吗？'
     }
   },
   form: {

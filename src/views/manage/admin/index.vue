@@ -5,7 +5,7 @@ import { adminStatusLabels, adminStatusOptions } from '@/constants/business';
 import { createAdmin, fetchAdminList, updateAdmin, updateAdminPassword } from '@/service/api';
 import { useAppStore } from '@/store/modules/app';
 import { useNaivePaginatedTable, useTableOperate } from '@/hooks/common/pro-table';
-import { getRouteQueryParam } from '@/utils/common';
+import { getRouteQueryParam, parseNumberParam } from '@/utils/common';
 import { toDatetimeRangeFieldProps } from '@/utils/date';
 import { $t } from '@/locales';
 import AdminOperateForm from './modules/admin-operate-form.vue';
@@ -31,7 +31,7 @@ const { columns, columnChecks, data, loading, tableProps, searchForm, searchColu
       status: null
     },
     searchOnceValues: {
-      id: getRouteQueryParam('id')
+      id: getRouteQueryParam('id', parseNumberParam)
     },
     searchColumns: () => [
       {
@@ -176,14 +176,12 @@ const { columns, columnChecks, data, loading, tableProps, searchForm, searchColu
 const { operateType, form, formLoading, handleEdit, handleAdd, closeForm, checkedRowKeys } = useTableOperate<
   Api.SystemManage.Admin,
   Api.SystemManage.Admin,
-  OperateType,
-  'id'
+  OperateType
 >({
   data,
-  idKey: 'id',
   getData,
-  onSubmit: async (values, type, form) => {
-    const id = form.values.value.id!;
+  onSubmit: async (values, type, operateForm) => {
+    const id = operateForm.values.value.id!;
     const handlers: Record<OperateType, () => Promise<any>> = {
       add: () => createAdmin(values),
       edit: () => updateAdmin(id, values),

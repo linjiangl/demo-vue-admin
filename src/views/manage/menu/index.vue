@@ -190,8 +190,8 @@ const { operateType, form, formLoading, handleAdd, handleEdit, handleDelete } = 
   data,
   idKey: 'id',
   getData,
-  onSubmit: async (values, type, form) => {
-    const id = form.values.value.id!;
+  onSubmit: async (values, type, operateForm) => {
+    const id = operateForm.values.value.id!;
 
     const handlers: Record<NaiveUI.TableOperateType, () => Promise<any>> = {
       add: () => createAdminMenu(values),

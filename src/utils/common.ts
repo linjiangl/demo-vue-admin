@@ -161,7 +161,7 @@ export function openWebUrl(url: string) {
 }
 
 function isNullish(value: unknown): value is Nullish {
-  return value == null;
+  return value === null || value === undefined;
 }
 
 function getSingleRouteQueryValue(queryValue: unknown): string | null {

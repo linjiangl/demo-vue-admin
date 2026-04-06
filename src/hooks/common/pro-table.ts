@@ -51,16 +51,18 @@ type DefaultPaginatedResponseData<ApiData> = FlatResponseData<
   Api.Common.PaginatingQueryRecord<ApiData>
 >;
 
-type FieldTransformer<TableData extends Record<string, any>> = (value: unknown, record: TableData) => unknown;
+type FieldTransformer<TableData extends Record<string, unknown>> = (value: unknown, record: TableData) => unknown;
+
+type DefaultTableIdKey<TableData extends Record<string, unknown>> =
+  Extract<'id', keyof TableData> extends never ? keyof TableData : Extract<'id', keyof TableData>;
 
 type UseTableOperateOptions<
-  TableData extends Record<string, any>,
-  FormData extends Record<string, any>,
+  TableData extends Record<string, unknown>,
+  FormData extends Record<string, unknown>,
   OperateType extends string,
   IdKey extends keyof TableData
 > = {
   data: Ref<TableData[]>;
-  idKey: IdKey;
   getData: () => Promise<void>;
   onSubmit?: (
     values: FormData,
@@ -75,7 +77,7 @@ type UseTableOperateOptions<
     form: ReturnType<typeof createProModalForm<FormData>>,
     operateType: OperateType
   ) => void;
-};
+} & ('id' extends keyof TableData ? { idKey?: IdKey } : { idKey: IdKey });
 
 type UseNaivePaginatedTableOptions<
   ApiData,
@@ -343,12 +345,13 @@ export function useNaivePaginatedTable<
 }
 
 export function useTableOperate<
-  TableData extends Record<string, any>,
-  FormData extends Record<string, any> = TableData,
+  TableData extends Record<string, unknown>,
+  FormData extends Record<string, unknown> = TableData,
   OperateType extends string = NaiveUI.TableOperateType,
-  IdKey extends keyof TableData = keyof TableData
+  IdKey extends keyof TableData = DefaultTableIdKey<TableData>
 >(options: UseTableOperateOptions<TableData, FormData, OperateType, IdKey>) {
-  const { data, idKey, getData, onSubmit, onDelete, successMessage, fieldTypeTransform, onValueChange } = options;
+  const { data, getData, onSubmit, onDelete, successMessage, fieldTypeTransform, onValueChange } = options;
+  const idKey = (options.idKey ?? 'id') as IdKey;
   const { loading: formLoading, startLoading, endLoading } = useLoading(false);
 
   const operateType = shallowRef<OperateType>('add' as OperateType);
@@ -387,7 +390,7 @@ export function useTableOperate<
     }
   });
 
-  function applyFieldTransform<T extends Record<string, any>, R = T>(
+  function applyFieldTransform<T extends Record<string, unknown>, R = T>(
     source: T,
     transforms?: Record<string, FieldTransformer<TableData>>
   ): R {

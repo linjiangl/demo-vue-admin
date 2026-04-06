@@ -57,8 +57,8 @@ export function useRemoteSearch<T>(
         const remoteOptions = data.map(formatFn).filter((option: ReturnType<FormatFunction<T>>) => option.value !== 0);
         searchState.options = [...defaultOptions, ...remoteOptions];
       }
-    } catch (error) {
-      console.error(`${errorPrefix} failed:`, error);
+    } catch {
+      window.$message?.error(`${errorPrefix} failed`);
       searchState.options = defaultOptions;
     } finally {
       searchState.loading = false;

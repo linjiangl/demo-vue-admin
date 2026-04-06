@@ -15,7 +15,7 @@ export function fetchAdminInfo(id: number) {
   });
 }
 
-export function createAdmin(data: any) {
+export function createAdmin(data: object) {
   return request({
     url: '/admins',
     method: 'post',
@@ -23,7 +23,7 @@ export function createAdmin(data: any) {
   });
 }
 
-export function updateAdmin(id: number, data: any) {
+export function updateAdmin(id: number, data: object) {
   return request({
     url: `/admins/${id}`,
     method: 'put',
@@ -47,7 +47,7 @@ export function searchAdmin(keyword: string) {
   });
 }
 
-export function fetchAdminRoleList(params?: any) {
+export function fetchAdminRoleList(params?: Api.SystemManage.AdminRoleSearchParams) {
   return request<Api.SystemManage.AdminRoleList>({
     url: '/admin/roles',
     method: 'get',
@@ -62,7 +62,7 @@ export function fetchAdminRoleInfo(id: number) {
   });
 }
 
-export function createAdminRole(data: any) {
+export function createAdminRole(data: object) {
   return request({
     url: '/admin/roles',
     method: 'post',
@@ -70,7 +70,7 @@ export function createAdminRole(data: any) {
   });
 }
 
-export function updateAdminRole(id: number, data: any) {
+export function updateAdminRole(id: number, data: object) {
   return request({
     url: `/admin/roles/${id}`,
     method: 'put',
@@ -85,7 +85,7 @@ export function destroyAdminRole(id: number) {
   });
 }
 
-export function saveRoleMenus(id: number, data: any) {
+export function saveRoleMenus(id: number, data: object) {
   return request({
     url: `/admin/roles/${id}/saveMenus`,
     method: 'post',
@@ -93,7 +93,7 @@ export function saveRoleMenus(id: number, data: any) {
   });
 }
 
-export function fetchAdminMenuList(params?: any) {
+export function fetchAdminMenuList(params?: Api.SystemManage.AdminMenuSearchParams) {
   return request<Api.SystemManage.AdminMenuList>({
     url: '/admin/menus',
     method: 'get',
@@ -108,7 +108,7 @@ export function fetchAdminMenuInfo(id: number) {
   });
 }
 
-export function createAdminMenu(data: any) {
+export function createAdminMenu(data: object) {
   return request({
     url: '/admin/menus',
     method: 'post',
@@ -116,7 +116,7 @@ export function createAdminMenu(data: any) {
   });
 }
 
-export function updateAdminMenu(id: number, data: any) {
+export function updateAdminMenu(id: number, data: object) {
   return request({
     url: `/admin/menus/${id}`,
     method: 'put',

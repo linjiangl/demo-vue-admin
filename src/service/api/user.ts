@@ -15,7 +15,7 @@ export function fetchUserInfo(id: number) {
   });
 }
 
-export function createUser(data: any) {
+export function createUser(data: object) {
   return request({
     url: '/users',
     method: 'post',
@@ -23,7 +23,7 @@ export function createUser(data: any) {
   });
 }
 
-export function updateUser(id: number, data: any) {
+export function updateUser(id: number, data: object) {
   return request({
     url: `/users/${id}`,
     method: 'put',

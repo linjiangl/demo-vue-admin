@@ -6,22 +6,24 @@ type SearchApiFunction<T> = (query: string) => Promise<{ data: T[] } | any>;
 type FormatFunction<T> = (item: T) => { label: string; value: number | string };
 
 type RemoteSearchOptions = {
+  errorPrefix: string;
   zeroOption?: boolean | { label?: string };
 };
+
+type SearchOptions = Omit<RemoteSearchOptions, 'errorPrefix'>;
 
 /**
  * 通用远程搜索 Hook
  * @param searchFn 搜索 API 函数
  * @param formatFn 格式化选项函数
- * @param errorPrefix 错误日志前缀
  * @param options
  */
 export function useRemoteSearch<T>(
   searchFn: SearchApiFunction<T>,
   formatFn: FormatFunction<T>,
-  errorPrefix: string,
-  options?: RemoteSearchOptions
+  options: RemoteSearchOptions
 ) {
+  const { errorPrefix } = options;
   const zeroOptionLabel = typeof options?.zeroOption === 'object' ? options.zeroOption.label : undefined;
 
   const defaultOptions = options?.zeroOption
@@ -72,15 +74,17 @@ export function useRemoteSearch<T>(
 /**
  * 用户搜索配置
  */
-export function useUserSearch(options?: RemoteSearchOptions) {
+export function useUserSearch(options?: SearchOptions) {
   return useRemoteSearch<Api.User.User>(
     searchUser,
     user => ({
       label: `${user.id} ${user.nickname}`,
       value: user.id
     }),
-    'User search',
-    options
+    {
+      errorPrefix: 'User search',
+      ...options
+    }
   );
 }
 
@@ -94,6 +98,6 @@ export function useAdminSearch() {
       label: `${user.id} ${user.username}`,
       value: user.id
     }),
-    'User search'
+    { errorPrefix: 'User search' }
   );
 }

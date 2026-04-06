@@ -173,25 +173,29 @@ const { columns, columnChecks, data, loading, tableProps, searchForm, searchColu
     ]
   });
 
-const { operateType, form, formLoading, handleEdit, handleAdd, closeForm, checkedRowKeys } =
-  useTableOperate<Api.SystemManage.Admin, Api.SystemManage.Admin, OperateType, 'id'>({
-    data,
-    idKey: 'id',
-    getData,
-    onSubmit: async (values, type, form) => {
-      const id = form.values.value.id!;
-      const handlers: Record<OperateType, () => Promise<any>> = {
-        add: () => createAdmin(values),
-        edit: () => updateAdmin(id, values),
-        password: () => updateAdminPassword(id, values)
-      };
-      const { error } = await handlers[type]();
-      if (error) throw error;
-    },
-    successMessage: {
-      password: '密码修改成功'
-    }
-  });
+const { operateType, form, formLoading, handleEdit, handleAdd, closeForm, checkedRowKeys } = useTableOperate<
+  Api.SystemManage.Admin,
+  Api.SystemManage.Admin,
+  OperateType,
+  'id'
+>({
+  data,
+  idKey: 'id',
+  getData,
+  onSubmit: async (values, type, form) => {
+    const id = form.values.value.id!;
+    const handlers: Record<OperateType, () => Promise<any>> = {
+      add: () => createAdmin(values),
+      edit: () => updateAdmin(id, values),
+      password: () => updateAdminPassword(id, values)
+    };
+    const { error } = await handlers[type]();
+    if (error) throw error;
+  },
+  successMessage: {
+    password: '密码修改成功'
+  }
+});
 
 function edit(row: Api.SystemManage.Admin) {
   handleEdit(row.id);

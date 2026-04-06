@@ -35,7 +35,9 @@ export function getRouteQueryParams<Key extends string>(...keys: Key[]): Partial
   const route = useRoute();
   const result: Partial<Record<Key, string | null>> = {};
   const entries =
-    keys.length > 0 ? keys.map(key => [key, route.query[key]] as const) : (Object.entries(route.query) as [Key, unknown][]);
+    keys.length > 0
+      ? keys.map(key => [key, route.query[key]] as const)
+      : (Object.entries(route.query) as [Key, unknown][]);
 
   for (const [key, value] of entries) {
     result[key] = getSingleRouteQueryValue(value);

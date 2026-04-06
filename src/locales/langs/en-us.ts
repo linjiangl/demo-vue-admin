@@ -234,7 +234,7 @@ const local: App.I18n.Schema = {
     manage_role: 'Role List',
     manage_menu: 'Menu List',
     user: 'User Management',
-    user_index: 'User List',
+    user_index: 'User List'
   },
   page: {
     login: {

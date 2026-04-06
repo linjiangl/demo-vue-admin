@@ -38,4 +38,3 @@ export function searchUser(keyword: string) {
     params: { keyword }
   });
 }
-

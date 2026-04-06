@@ -12,7 +12,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   user: null,
-  link: false,
+  link: false
 });
 
 const displayNickname = computed(() => {

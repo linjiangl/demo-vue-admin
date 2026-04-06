@@ -2,13 +2,6 @@ import { computed, ref } from 'vue';
 import type { UploadFileInfo, UploadProps } from 'naive-ui';
 import { getUploadConfig } from '@/service/api';
 
-type UploadConfig = {
-  url: string;
-  method: string;
-  name: string;
-  form?: Record<string, string | Blob>;
-};
-
 /**
  * 将后端返回的文件路径批量转换为 UploadFileInfo 格式
  * @param filePaths - 文件路径数组
@@ -51,14 +44,16 @@ export function getUploadFileValue(files: UploadFileInfo[], multiple = false): s
  * @param uploadConfig - 上传配置对象
  * @returns ProUpload field-props
  */
-function getUploadConfigProps(uploadConfig: UploadConfig): UploadProps {
+function getUploadConfigProps(uploadConfig: Api.Upload.UploadConfig): UploadProps {
   return {
     action: uploadConfig.url,
     method: uploadConfig.method as 'POST',
     name: uploadConfig.name,
     data: uploadConfig.form,
     onFinish: ({ file, event }: { file: UploadFileInfo; event?: ProgressEvent }) => {
-      const response = JSON.parse((event?.target as XMLHttpRequest).response);
+      const response = JSON.parse(
+        (event?.target as XMLHttpRequest).response
+      ) as App.Service.Response<Api.Upload.UploadFileResponse>;
 
       file.name = response.data?.filename;
       file.url = response.data?.url;
@@ -85,7 +80,7 @@ function getUploadConfigProps(uploadConfig: UploadConfig): UploadProps {
  * ```
  */
 export function useProUpload() {
-  const uploadConfig = ref<UploadConfig | null>(null);
+  const uploadConfig = ref<Api.Upload.UploadConfig | null>(null);
 
   async function initUploadConfig() {
     const { data } = await getUploadConfig();

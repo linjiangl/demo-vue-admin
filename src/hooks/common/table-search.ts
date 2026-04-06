@@ -26,11 +26,11 @@ export function useRemoteSearch<T>(
 
   const defaultOptions = options?.zeroOption
     ? [
-      {
-        label: zeroOptionLabel || '无上级',
-        value: 0
-      }
-    ]
+        {
+          label: zeroOptionLabel || '无上级',
+          value: 0
+        }
+      ]
     : [];
 
   const searchState = reactive({

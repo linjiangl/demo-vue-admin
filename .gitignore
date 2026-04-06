@@ -34,3 +34,4 @@ yarn.lock
 
 .VSCodeCounter
 .claude/settings.local.json
+opencode.json

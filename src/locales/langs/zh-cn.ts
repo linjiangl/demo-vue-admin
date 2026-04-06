@@ -230,7 +230,7 @@ const local: App.I18n.Schema = {
     manage_role: '角色列表',
     manage_menu: '菜单列表',
     user: '用户管理',
-    user_index: '用户列表',
+    user_index: '用户列表'
   },
   page: {
     login: {

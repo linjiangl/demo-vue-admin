@@ -44,7 +44,7 @@ export function getUploadFileValue(files: UploadFileInfo[], multiple = false): s
  * @param uploadConfig - 上传配置对象
  * @returns ProUpload field-props
  */
-function getUploadConfigProps(uploadConfig: Api.Upload.UploadConfig): UploadProps {
+function getUploadConfigProps(uploadConfig: Api.Common.UploadConfig): UploadProps {
   return {
     action: uploadConfig.url,
     method: uploadConfig.method as 'POST',
@@ -53,7 +53,7 @@ function getUploadConfigProps(uploadConfig: Api.Upload.UploadConfig): UploadProp
     onFinish: ({ file, event }: { file: UploadFileInfo; event?: ProgressEvent }) => {
       const response = JSON.parse(
         (event?.target as XMLHttpRequest).response
-      ) as App.Service.Response<Api.Upload.UploadFileResponse>;
+      ) as App.Service.Response<Api.Common.UploadFileResponse>;
 
       file.name = response.data?.filename;
       file.url = response.data?.url;
@@ -80,7 +80,7 @@ function getUploadConfigProps(uploadConfig: Api.Upload.UploadConfig): UploadProp
  * ```
  */
 export function useProUpload() {
-  const uploadConfig = ref<Api.Upload.UploadConfig | null>(null);
+  const uploadConfig = ref<Api.Common.UploadConfig | null>(null);
 
   async function initUploadConfig() {
     const { data } = await getUploadConfig();

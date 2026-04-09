@@ -82,10 +82,10 @@ function getUploadConfigProps(uploadConfig: Api.Common.UploadConfig): UploadProp
 export function useProUpload() {
   const uploadConfig = ref<Api.Common.UploadConfig | null>(null);
 
-  async function initUploadConfig() {
-    const { data } = await getUploadConfig();
-    if (data) {
-      uploadConfig.value = data;
+  async function initUploadConfig(data?: Record<string, unknown>) {
+    const { data: responseData } = await getUploadConfig(data);
+    if (responseData) {
+      uploadConfig.value = responseData;
     }
   }
 

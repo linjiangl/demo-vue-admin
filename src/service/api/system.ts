@@ -1,8 +1,9 @@
 import { request } from '../request';
 
-export function getUploadConfig() {
+export function getUploadConfig(data?: Record<string, unknown>) {
   return request<Api.Common.UploadConfig>({
     url: '/upload/config',
-    method: 'get'
+    method: 'post',
+    data
   });
 }
